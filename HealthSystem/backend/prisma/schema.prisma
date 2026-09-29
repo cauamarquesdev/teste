@@ -1,0 +1,262 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+
+
+model Tenant {
+  id        String   @id @default(uuid())
+  name      String
+  document  String?
+  createdAt DateTime @default(now())
+
+  users         User[]
+  contacts      Contact[]
+  patients      Patient[]
+  appointments  Appointment[]
+  procedures    Procedure[]
+  clinicalNotes ClinicalNote[]
+}
+
+
+model User {
+  id        String   @id @default(uuid())
+  name      String
+  email     String   @unique
+  password  String
+  role      String   @default("ADMIN")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tenantId String
+  tenant   Tenant @relation(fields: [tenantId], references: [id])
+
+  appointments  Appointment[] @relation("ProfessionalAppointments")
+  sales         Sale[]
+  clinicalNotes ClinicalNote[]
+  prescriptions Prescription[]
+}
+
+
+model Patient {
+  id          String   @id @default(uuid())
+  tenantId    String
+  name        String
+  cpf         String?
+  birthDate   DateTime?
+  phone       String
+  email       String?
+  hasWhatsapp Boolean  @default(true)
+  active      Boolean  @default(true)
+  avatar      String?
+  createdAt   DateTime @default(now())
+
+  tenant         Tenant         @relation(fields: [tenantId], references: [id])
+  appointments   Appointment[]
+  sales          Sale[]
+  clinicalNotes  ClinicalNote[]
+  prescriptions  Prescription[]
+  media          PatientMedia[]
+}
+
+// ======================================================
+// ENUM DE FUNÇÃO
+// ======================================================
+
+enum Role {
+  ADMIN
+  PROFESSIONAL
+  RECEPTIONIST
+}
+
+// ======================================================
+// CONTATOS
+// ======================================================
+
+model Contact {
+  id            String      @id @default(uuid())
+  tenantId      String
+  name          String
+  phone         String?
+  birthDate     DateTime?
+  isActive      Boolean     @default(true)
+  lastVisitDate DateTime?
+  types         ContactType[]
+
+  tenant Tenant @relation(fields: [tenantId], references: [id])
+}
+
+enum ContactType {
+  PACIENTE
+  PROFISSIONAL
+  FORNECEDOR
+  LEAD
+}
+
+// ======================================================
+// PROCEDIMENTOS
+// ======================================================
+
+model Procedure {
+  id       String @id @default(uuid())
+  tenantId String
+  name     String
+  duration Int
+  price    Float
+
+  tenant       Tenant        @relation(fields: [tenantId], references: [id])
+  appointments Appointment[]
+}
+
+// ======================================================
+// AGENDA
+// ======================================================
+
+model Appointment {
+  id             String   @id @default(uuid())
+  date           DateTime
+  status         String   @default("AGENDADO")
+  patientId      String
+  tenantId       String
+  professionalId String
+  procedureId    String
+  createdAt      DateTime @default(now())
+
+  tenant       Tenant    @relation(fields: [tenantId], references: [id])
+  patient      Patient   @relation(fields: [patientId], references: [id])
+  professional User      @relation("ProfessionalAppointments", fields: [professionalId], references: [id])
+  procedure    Procedure @relation(fields: [procedureId], references: [id])
+}
+
+// ======================================================
+// STATUS DA CONSULTA
+// ======================================================
+
+enum ApptStatus {
+  PENDENTE
+  CONFIRMADO
+  EM_ATENDIMENTO
+  CONCLUIDO
+  CANCELADO
+  FALTA
+}
+
+// ======================================================
+// VENDAS
+// ======================================================
+
+model Sale {
+  id          String   @id @default(uuid())
+  totalAmount Decimal
+  status      String   @default("PAGO")
+  paymentType String?
+
+  patientId String
+  patient   Patient @relation(fields: [patientId], references: [id])
+
+  userId String
+  user   User @relation(fields: [userId], references: [id])
+
+  items                 SaleItem[]
+  financialTransactions FinancialTransaction[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ======================================================
+// ITENS DA VENDA
+// ======================================================
+
+model SaleItem {
+  id       String  @id @default(uuid())
+  name     String
+  price    Decimal
+  quantity Int     @default(1)
+
+  saleId String
+  sale   Sale @relation(fields: [saleId], references: [id], onDelete: Cascade)
+}
+
+// ======================================================
+// FINANCEIRO
+// ======================================================
+
+model FinancialTransaction {
+  id          String   @id @default(uuid())
+  description String
+  amount      Decimal
+  type        String
+  status      String   @default("PENDENTE")
+
+  dueDate     DateTime
+  paymentDate DateTime?
+
+  category      String
+  paymentMethod String?
+
+  saleId String?
+  sale   Sale? @relation(fields: [saleId], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// ======================================================
+// FICHA CLÍNICA / ANAMNESE
+// ======================================================
+
+model ClinicalNote {
+  id        String   @id @default(uuid())
+  patientId String
+  tenantId  String
+  userId    String
+
+  title   String @default("Ficha de Anamnese")
+  content String @db.Text
+
+  patient Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+  tenant  Tenant  @relation(fields: [tenantId], references: [id])
+  user    User    @relation(fields: [userId], references: [id])
+
+  createdAt DateTime @default(now())
+}
+
+// ======================================================
+// RECEITAS / ATESTADOS
+// ======================================================
+
+model Prescription {
+  id      String @id @default(uuid())
+  title   String
+  content String @db.Text
+
+  patientId String
+  patient   Patient @relation(fields: [patientId], references: [id])
+
+  userId String
+  user   User @relation(fields: [userId], references: [id])
+
+  createdAt DateTime @default(now())
+}
+
+// ======================================================
+// MÍDIAS DO PACIENTE
+// ======================================================
+
+model PatientMedia {
+  id          String  @id @default(uuid())
+  url         String
+  type        String
+  description String?
+
+  patientId String
+  patient   Patient @relation(fields: [patientId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+}
